@@ -1,0 +1,85 @@
+name: Stage verified Windows candidate
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/windows-candidate.json]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-candidate
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Download and verify candidate archive
+        run: |
+          python3 <<'PY'
+          import hashlib, json, pathlib, re, urllib.parse, urllib.request, zipfile
+          candidate = json.loads(pathlib.Path('.github/windows-candidate.json').read_text())
+          url = urllib.parse.urlparse(candidate['archive_url'])
+          if url.scheme != 'https' or not (url.hostname or '').endswith(('.blob.core.windows.net', '.actions.githubusercontent.com')):
+              raise SystemExit('Unexpected GitHub artifact host')
+          if not re.fullmatch(r'[a-f0-9]{64}', candidate['archive_sha256']):
+              raise SystemExit('Invalid artifact digest')
+          if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', candidate['version']):
+              raise SystemExit('Invalid version')
+          with urllib.request.urlopen(candidate['archive_url'], timeout=60) as response:
+              payload = response.read(100_000_001)
+          if len(payload) > 100_000_000 or hashlib.sha256(payload).hexdigest() != candidate['archive_sha256']:
+              raise SystemExit('Archive digest or size mismatch')
+          pathlib.Path('candidate.zip').write_bytes(payload)
+          output = pathlib.Path('windows-installer')
+          output.mkdir()
+          allowed = {'VasqStrike-windows-x64.exe', 'build-info.json', 'SHA256SUMS'}
+          with zipfile.ZipFile('candidate.zip') as archive:
+              if set(archive.namelist()) != allowed or len(archive.infolist()) != 3:
+                  raise SystemExit('Unexpected artifact contents')
+              for name in allowed:
+                  if archive.getinfo(name).file_size > 100_000_000:
+                      raise SystemExit('Artifact member too large')
+                  (output / name).write_bytes(archive.read(name))
+          info = json.loads((output / 'build-info.json').read_text(encoding='utf-8-sig'))
+          if info['version'] != candidate['version'] or info['source_commit'] != candidate['source_commit'] or info['source_tree'] != candidate['source_tree']:
+              raise SystemExit('Source provenance mismatch')
+          if info['app_url'] != 'https://vasqstrike.tech' or info['authenticode_signed'] or info['updater_signed']:
+              raise SystemExit('Unexpected backend or signing metadata')
+          digest = hashlib.sha256((output / 'VasqStrike-windows-x64.exe').read_bytes()).hexdigest()
+          if digest != info['sha256'] or digest != candidate['installer_sha256']:
+              raise SystemExit('Installer digest mismatch')
+          expected = f"{digest}  VasqStrike-windows-x64.exe"
+          if (output / 'SHA256SUMS').read_text(encoding='utf-8-sig').strip() != expected:
+              raise SystemExit('Checksum manifest mismatch')
+          notes = (
+              f"Windows {info['version']} candidate. Backend: https://vasqstrike.tech.\n\n"
+              f"Source: FelipeVqs/VasqStrike@{info['source_commit']}; tree {info['source_tree']}.\n"
+              f"Native build: https://github.com/{info['build_repository']}/actions/runs/{info['build_run']}.\n\n"
+              "Unsigned NSIS installer; manual updates only. Windows may show an unknown-publisher warning.\n\n"
+              "General CI and native build tests passed. Installed-client sign-in has NOT been verified. "
+              "WorkOS AuthKit is the expected login provider and returns to vasqstrike.tech. "
+              "The running production backend still needs the already-tested public-origin fix deployed; "
+              "this installer alone does not fix the server redirect to 0.0.0.0.\n\n"
+              "Keep this release as a draft until production callbacks and installed-client sign-in are verified.\n"
+          )
+          pathlib.Path('release-notes.md').write_text(notes)
+          pathlib.Path('release-tag.txt').write_text('windows-v' + candidate['version'])
+          PY
+      - name: Create immutable draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(cat release-tag.txt)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to replace its assets."
+            exit 1
+          fi
+          gh release create "$tag" windows-installer/* --target "$GITHUB_SHA" --draft --latest=false --title "Windows Desktop ${tag#windows-v} (unsigned candidate)" --notes-file release-notes.md
