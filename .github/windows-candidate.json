@@ -1,0 +1,8 @@
+{
+  "version": "0.1.3",
+  "source_commit": "57ff3e29bf52f141cabef7e98978e3c2c8531b80",
+  "source_tree": "543e33f40640958ecafbf6069e9e9a6d71675a2f",
+  "archive_url": "https://productionresultssa2.blob.core.windows.net/actions-results/91e187fc-953d-8606-a20a-126ee75c0f5d/workflow-job-run-1cf6ad46-a5c9-5ffb-b907-55c56434cbfb/artifacts/70d34064d28c9aada7c4b507a057b0d963b7ca344526146fc9bdff2a5765051d.zip?rscd=attachment%3B+filename%3D%22VasqStrike-Windows-0.1.3-43213059832.zip%22&rsct=application%2Fzip&se=2026-11-12T15%3A06%3A04Z&sig=jO6n%2Fx1GpC%2Be0mQx1hIkzpj4Y%2BRkJPlPpaJsHg5uKe4%3D&ske=2026-11-12T18%3A11%3A42Z&skoid=ca7593d4-ee42-46cd-af88-8b886a2f84eb&sks=b&skt=2026-11-12T14%3A11%3A42Z&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skv=2025-11-05&sp=r&spr=https&sr=b&st=2026-11-12T14%3A55%3A59Z&sv=2025-11-05",
+  "archive_sha256": "9ee370e7df1b690a79cae2a5f6101798caf17ba2f95751a983af5ee6abf130a8",
+  "installer_sha256": "9916eaf32cd1bfdbf7d9e9924968f87ec3a496551aa95c6e0800afeda3169f8e"
+}
